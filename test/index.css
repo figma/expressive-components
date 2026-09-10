@@ -1,0 +1,8 @@
+/* Tailwind for the fixture harness. The fixtures are largely Figma
+ * "copy as code" output, which emits Tailwind utility classes
+ * (e.g. size-[171px], inset-[...], bg-gradient-to-b, from-[rgba(...)]).
+ *
+ * source(none) disables automatic scanning; @source limits class detection
+ * to the fixtures and harness in this directory. */
+@import 'tailwindcss' source(none);
+@source './**/*.{ts,tsx}';
