@@ -1,18 +1,10 @@
 # Dependencies and build outputs
 node_modules/
 dist/
-demo-dist/
+examples-dist/
 /src/source.generated.ts
 *.tsbuildinfo
 *.tgz
-
-# Test output (keep committed screenshot baselines)
-coverage/
-test/e2e/.results/
-test/fixtures/*/actual.png
-playwright-report/
-blob-report/
-test-results/
 
 # Local configuration and credentials
 .env

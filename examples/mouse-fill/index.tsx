@@ -4,7 +4,8 @@ import { setup, render } from './effect'
 export default function MouseFill() {
   return (
     <ShaderEffect
-      className="size-[256px]"
+      width={256}
+      height={256}
       shaders={[
         {
           setup,

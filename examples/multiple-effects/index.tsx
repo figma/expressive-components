@@ -8,6 +8,8 @@ export default function MultipleEffects() {
       <div id="monochrome-then-colorize-red">
         <h1>Monochrome then colorize red</h1>
         <ShaderEffect
+          width={100}
+          height={100}
           shaders={[
             {
               setup: setupMonochrome,
@@ -27,6 +29,8 @@ export default function MultipleEffects() {
       <div id="colorize-red-then-monochrome">
         <h1>Colorize red then monochrome</h1>
         <ShaderEffect
+          width={100}
+          height={100}
           shaders={[
             {
               setup: setupColorizeRed,

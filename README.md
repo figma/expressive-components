@@ -27,9 +27,8 @@ npm run build
 npm run dev
 ```
 
-Open <http://127.0.0.1:9234> to explore the fixtures. For DOM effects, enable
+Open <http://127.0.0.1:9234> to explore the examples. For DOM effects, enable
 `chrome://flags/#enable-experimental-web-platform-features` and restart Chrome.
-The automated tests configure the required Chromium flags for you.
 
 The package is named `@figma/expressive-components`. To use it in another project
 before a registry release, run `npm pack` here and install the resulting `.tgz`
@@ -60,14 +59,14 @@ export function Fill() {
 }
 ```
 
-See the complete [pattern grid fixture](test/fixtures/pattern-grid/index.tsx) for a
+See the complete [pattern grid example](examples/pattern-grid/index.tsx) for a
 procedural shader and its parameters.
 
 ## Effects on DOM content
 
 Pass an ordered `shaders` array. The first shader receives the rasterized children;
 each subsequent shader receives the previous shader's output. The last shader
-renders into the canvas. Use CSS to size the canvas and content.
+renders into the canvas. Pass `width` and `height` to size the canvas.
 
 ```tsx
 import { ShaderEffect, type Shader } from '@figma/expressive-components'
@@ -86,7 +85,7 @@ const shaders: Shader[] = [{
 
 export function GlowingCircle() {
   return (
-    <ShaderEffect shaders={shaders} className="glowing-circle">
+    <ShaderEffect shaders={shaders} width={118} height={118}>
       <svg viewBox="0 0 118 118" width="118" height="118">
         <circle cx="59" cy="59" r="59" fill="#D9D9D9" />
       </svg>
@@ -95,12 +94,8 @@ export function GlowingCircle() {
 }
 ```
 
-```css
-.glowing-circle { width: 118px; height: 118px; }
-```
-
-The [bloom fixture](test/fixtures/circle-with-bloom-effect) and
-[effect ordering fixture](test/fixtures/multiple-effects) contain runnable examples.
+The [bloom example](examples/circle-with-bloom-effect) and
+[effect ordering example](examples/multiple-effects) contain runnable examples.
 `CustomEffect` remains an alias for `ShaderEffect`; it takes the same `shaders` prop.
 
 ## Shader contract
@@ -158,7 +153,7 @@ explicitly dispose resources stored by shaders in `frame.state`.
 | Component | Props |
 | --- | --- |
 | `ShaderFill` | `shader`, optional `width`, `height`, `className`, `style`, `mask` |
-| `ShaderEffect` | `shaders`, optional `children`, `className`, `mask` |
+| `ShaderEffect` | `shaders`, optional `width`, `height`, `children`, `className`, `mask` |
 
 Both components expose TypeScript prop types. `Shader`, `CustomEffectState`,
 `Manifest`, the HTML-in-Canvas types, `DEFAULT_MANIFEST`, and `useWebGPUDevice`
@@ -176,18 +171,15 @@ import { SOURCES } from '@figma/expressive-components/source'
 ```sh
 npm ci
 npm run check                         # TypeScript, ESLint, and library build
-npm run build:demo                    # Build the fixture browser
-npx playwright install --with-deps chromium
-npm test                             # Six Chromium screenshot tests
+npm run build:examples                # Build the example browser
+npm run dev                          # Run examples for manual testing
 npm pack --dry-run                    # Inspect the publishable package
 ```
 
-The runtime and browser test specs are type-checked; exported fixture shader bodies
-are exercised by the browser tests. Screenshot baselines were captured on Linux
-x86-64 with SwiftShader. Use the same platform and pinned Playwright version when
-updating them with `npm run test:e2e:update`, and review every image change.
+The runtime is type-checked. Use the example browser to manually verify rendering,
+animation, pointer input, and shader ordering after making changes.
 
-See [the test harness guide](test/README.md) and [contributing guide](CONTRIBUTING.md).
+See [the examples guide](examples/README.md) and [contributing guide](CONTRIBUTING.md).
 GitHub Actions runs these checks on pull requests and pushes to `main`.
 
 ## License

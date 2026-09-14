@@ -4,22 +4,21 @@ Open an issue to discuss a bug or substantial API change, or submit a pull reque
 with a focused change and a description of the behavior it addresses.
 
 Use Node.js 22.12 or newer and npm. Run `npm ci`, then `npm run dev` to explore the
-fixtures. Before submitting a change, run:
+examples. Before submitting a change, run:
 
 ```sh
 npm run check
-npm run build:demo
-npx playwright install --with-deps chromium
-npm test
+npm run build:examples
 npm pack --dry-run
 ```
 
-Include a fixture or regression test for rendering changes. Update screenshots
-only when the intended visual output changes, using Linux x86-64 and the pinned
-Playwright Chromium version. Review and commit the changed baseline images.
+Include or update a runnable example for rendering changes. Start `npm run dev`
+and manually verify the affected examples in a browser with the required features
+enabled; see [the examples guide](examples/README.md).
 
-Keep library code under `src/`, browser fixtures under `test/fixtures/`, and
-Playwright specs under `test/e2e/`. Generated files, dependencies, and build output
+Keep library code under `src/` and runnable examples under `examples/`.
+Pass explicit `width` and `height` props to every `ShaderEffect` and `ShaderFill`
+in an example. Generated files, dependencies, and build output
 are ignored. Commit `package-lock.json` when changing dependencies so fresh clones
 and CI resolve the same versions.
 

@@ -4,6 +4,8 @@ import { setup as setup6004_4, render as render6004_4 } from './effect'
 export default function CircleWithBloomEffect() {
   return (
     <ShaderEffect
+      width={118}
+      height={118}
       shaders={[
         {
           setup: setup6004_4,

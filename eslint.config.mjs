@@ -3,8 +3,8 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  // Keep this exported shader fixture verbatim; browser screenshots validate it.
-  { ignores: ['test/fixtures/pattern-grid/pattern_grid.ts', 'dist/**', 'demo-dist/**', 'src/source.generated.ts', 'test/e2e/.results/**', 'playwright-report/**', 'blob-report/**'] },
+  // Keep this exported shader verbatim; validate it in the example browser.
+  { ignores: ['examples/pattern-grid/pattern_grid.ts', 'dist/**', 'examples-dist/**', 'src/source.generated.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

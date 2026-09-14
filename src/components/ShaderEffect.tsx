@@ -6,6 +6,8 @@ import { useShaderRuntime } from '../useShaderRuntime.js'
 
 export type ShaderEffectProps = {
   children?: ReactNode
+  width?: number
+  height?: number
   shaders: Shader[]
   className?: string
   // A CSS `mask` value (e.g. `url("…")`) clipping the canvas to the node's vector shape. The fill is
@@ -16,6 +18,8 @@ export type ShaderEffectProps = {
 export function ShaderEffect({
   children,
   shaders,
+  width,
+  height,
   className,
   mask,
 }: ShaderEffectProps): JSX.Element {
@@ -41,6 +45,8 @@ export function ShaderEffect({
       className={className}
       style={{
         display: 'block',
+        width,
+        height,
         ...(processedMask && { mask: processedMask }),
         pointerEvents: hasChildren ? undefined : 'none',
       }}
