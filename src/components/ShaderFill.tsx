@@ -44,6 +44,9 @@ export function ShaderFill({
       className={className}
       style={{
         display: 'block',
+        // Keep intrinsic CSS sizing independent of the Retina backing store.
+        contain: 'size',
+        containIntrinsicSize: '300px 150px',
         ...(processedMask && { mask: processedMask }),
         pointerEvents: 'none',
         ...sizeStyle,

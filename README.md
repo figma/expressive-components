@@ -145,7 +145,7 @@ new shader object/array when parameters change.
 | `input` | Rasterized DOM or preceding shader output; fills receive a zeroed scratch texture |
 | `output` | Current render target; may be `null` during setup |
 | `time`, `deltaTime`, `frame` | Elapsed milliseconds, frame delta, and frame counter |
-| `mousePosition` | Pointer coordinates relative to the canvas; `down` is currently always `false` |
+| `mousePosition` | Pointer coordinates in CSS pixels relative to the canvas; `down` is currently always `false` |
 | `renderScale` | Currently `1` |
 | `params` | The shader's parameter object |
 | `state` | Per-shader scratch state shared between setup and render |
@@ -160,8 +160,15 @@ manifest on the shader object (`{ setup, render, params, manifest }`). Omitting 
 uses `DEFAULT_MANIFEST`, which disables both behaviors.
 
 The runtime shares one GPU device across the page, manages canvas/input/intermediate
-textures, and observes resizing. It does not recover from GPU device loss or
-explicitly dispose resources stored by shaders in `frame.state`.
+textures, and observes resizing. GPU validation, allocation failures, and device loss
+show the component fallback (children for `ShaderEffect`, nothing for `ShaderFill`).
+After device loss, remounting acquires a fresh shared device. Shader resources stored
+in `frame.state` are not explicitly disposed by the runtime.
+
+Fragment positions are texture pixels. For pointer comparisons in CSS pixels, divide
+fragment coordinates by the actual backing-to-logical size ratio on each axis
+(`physicalWidth / width`, `physicalHeight / height`). This also handles downsampling;
+see the mouse fill example.
 
 ## Component props
 

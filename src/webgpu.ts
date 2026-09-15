@@ -9,7 +9,7 @@ let devicePromise: Promise<GPUDevice> | null = null
 // cache is cleared so a later mount can retry.
 function acquireDevice(): Promise<GPUDevice> {
   if (!devicePromise) {
-    devicePromise = (async () => {
+    const pending = (async () => {
       const gpu = navigator.gpu
       if (!gpu) {
         throw new Error('WebGPU unsupported.')
@@ -18,12 +18,19 @@ function acquireDevice(): Promise<GPUDevice> {
       if (!adapter) {
         throw new Error('Failed to get WebGPU adapter.')
       }
-      // TODO: observe `device.lost` to surface driver crashes / OOM / browser-induced
-      // device loss and re-acquire instead of leaving every canvas silently broken.
-      return adapter.requestDevice()
+      const device = await adapter.requestDevice()
+      void device.lost.then(() => {
+        if (devicePromise === pending) {
+          devicePromise = null
+        }
+      })
+      return device
     })()
-    devicePromise.catch(() => {
-      devicePromise = null
+    devicePromise = pending
+    void pending.catch(() => {
+      if (devicePromise === pending) {
+        devicePromise = null
+      }
     })
   }
   return devicePromise
@@ -31,7 +38,7 @@ function acquireDevice(): Promise<GPUDevice> {
 
 /**
  * Shares one WebGPU device across every ShaderEffect. The device is initialized once and
- * never destroyed for the page lifetime, so multiple effects can render against it.
+ * reused until lost. Mounted effects fall back on loss; a later mount acquires a new device.
  * Returns the device once ready (null until then) and any acquisition error.
  */
 export function useWebGPUDevice(): { device: GPUDevice | null; error: Error | null } {
@@ -44,6 +51,13 @@ export function useWebGPUDevice(): { device: GPUDevice | null; error: Error | nu
       (acquired) => {
         if (!cancelled) {
           setDevice(acquired)
+          void acquired.lost.then((info) => {
+            if (cancelled) {
+              return
+            }
+            setDevice(null)
+            setError(new Error(`WebGPU device lost: ${info.message || info.reason}`))
+          })
         }
       },
       (e) => {

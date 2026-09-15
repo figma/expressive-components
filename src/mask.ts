@@ -28,7 +28,7 @@ function extractRawMaskUrl(maskUrl: string): string | null {
  * a correct alpha mask for custom fills.
  */
 export function useProcessMaskUrl(maskUrl: string | undefined): string | null {
-  const [processedUrl, setProcessedUrl] = useState<string | null>(null)
+  const [processed, setProcessed] = useState<{ source: string; url: string } | null>(null)
 
   useEffect(() => {
     const rawMaskUrl = maskUrl && extractRawMaskUrl(maskUrl)
@@ -38,9 +38,12 @@ export function useProcessMaskUrl(maskUrl: string | undefined): string | null {
     }
 
     let cancelled = false
+    const controller = new AbortController()
 
     async function fetchAndTransform() {
-      const mask = await fetch(rawMaskUrl as string).then((response) => response.text())
+      const response = await fetch(rawMaskUrl as string, { signal: controller.signal })
+      if (!response.ok) {throw new Error(`Failed to load mask: ${response.status}`)}
+      const mask = await response.text()
 
       // Parse SVG and add a top-level fill:black !important so we can
       // use it as an alpha mask correctly.
@@ -48,7 +51,10 @@ export function useProcessMaskUrl(maskUrl: string | undefined): string | null {
       const svgDoc = parser.parseFromString(mask, 'image/svg+xml')
       const style = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'style')
       style.textContent = '* { fill: black !important; }'
-      const svgElement = svgDoc.querySelector('svg')!
+      const svgElement = svgDoc.querySelector('svg')
+      if (!svgElement || svgDoc.querySelector('parsererror')) {
+        throw new Error('Invalid SVG mask')
+      }
       svgElement.appendChild(style)
 
       const serializer = new XMLSerializer()
@@ -60,13 +66,19 @@ export function useProcessMaskUrl(maskUrl: string | undefined): string | null {
       if (cancelled) {
         return
       }
-      setProcessedUrl(result)
+      setProcessed({ source: maskUrl!, url: result })
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setProcessed(null)
+        console.warn('Failed to process mask', error)
+      }
     })
 
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [maskUrl])
 
-  return processedUrl
+  return maskUrl && processed?.source === maskUrl ? processed.url : null
 }

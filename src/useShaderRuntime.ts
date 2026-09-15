@@ -12,6 +12,7 @@ import type {
   ShaderData,
 } from './types.js'
 import { useWebGPUDevice } from './webgpu.js'
+import { beginGpuErrorScope } from './gpuErrors.js'
 import { getRenderSize } from './renderSize.js'
 
 export type DpiGPUTexture = GPUTexture & {
@@ -57,6 +58,7 @@ function makeDpiIndependent(
 }
 
 class RuntimeState {
+  generation = 0
   gpu: GpuState
   input: DpiGPUTexture | null
   output: DpiGPUTexture | null = null
@@ -213,10 +215,7 @@ export function useShaderRuntime({
   const isDirtiedRef = useRef(true)
   // The shared WebGPU device is initialized once and reused across every effect.
   const { device, error: deviceError } = useWebGPUDevice()
-  // Per-canvas context setup failures (missing context, HTML-in-Canvas unsupported, texture
-  // allocation) are not generally retryable, so `error` is a one-way latch and there is
-  // intentionally no recovery path. Per-frame render failures are treated as transient (see
-  // onpaint catch below) and don't flip this latch.
+  // GPU validation/allocation failures latch the fallback; DOM copy exceptions can retry.
   const [error, setError] = useState<Error | null>(null)
   const [deviceReady, setDeviceReady] = useState(false)
 
@@ -274,6 +273,15 @@ export function useShaderRuntime({
       if (hasChildren && !content) {
         return
       }
+      const generation = runtime.generation
+      const finish = beginGpuErrorScope(runtime.gpu.device, (error) => {
+        if (runtimeRef.current !== runtime || runtime.generation !== generation) {
+          return
+        }
+        setupCompleteRef.current = false
+        stopClockRef.current()
+        setError(error)
+      })
       try {
         if (hasChildren && content && isDirtiedRef.current) {
           copyElementImageToInputTexture(content, runtime)
@@ -295,6 +303,8 @@ export function useShaderRuntime({
         // typically succeeds, so we log and continue rather than latching the error.
         console.warn('Failed to render effect', e)
         return
+      } finally {
+        finish()
       }
       if (runtime.isAnimated) {
         startClockRef.current()
@@ -311,6 +321,12 @@ export function useShaderRuntime({
       return
     }
     let input: DpiGPUTexture | null = null
+    let cancelled = false
+    const finish = beginGpuErrorScope(device, (error) => {
+      if (!cancelled) {
+        setError(error)
+      }
+    })
     try {
       const context = canvas.getContext('webgpu')
       if (!context) {
@@ -364,9 +380,12 @@ export function useShaderRuntime({
       input?.destroy()
       console.warn('Failed to initialize shader runtime', e)
       setError(e instanceof Error ? e : new Error(String(e)))
+    } finally {
+      finish()
     }
 
     return () => {
+      cancelled = true
       stopClockRef.current()
       const runtime = runtimeRef.current
       if (runtime) {
@@ -406,6 +425,15 @@ export function useShaderRuntime({
         state: {},
       }
     })
+    const generation = ++runtime.generation
+    const finish = beginGpuErrorScope(runtime.gpu.device, (error) => {
+      if (runtimeRef.current !== runtime || runtime.generation !== generation) {
+        return
+      }
+      setupCompleteRef.current = false
+      stopClockRef.current()
+      setError(error)
+    })
     try {
       runtime.updateIntermediateTextures()
       shaders.forEach((effect, idx) => {
@@ -416,8 +444,11 @@ export function useShaderRuntime({
     } catch (e) {
       console.warn('Failed to set up effect', e)
       setError(e instanceof Error ? e : new Error(String(e)))
+    } finally {
+      finish()
     }
     return () => {
+      runtime.generation++
       setupCompleteRef.current = false
     }
   }, [shaders, deviceReady, canvas, hasChildren])
@@ -468,6 +499,15 @@ export function useShaderRuntime({
         return
       }
 
+      const generation = runtime.generation
+      const finish = beginGpuErrorScope(runtime.gpu.device, (error) => {
+        if (runtimeRef.current !== runtime || runtime.generation !== generation) {
+          return
+        }
+        setupCompleteRef.current = false
+        stopClockRef.current()
+        setError(error)
+      })
       try {
         // Avoid resetting the context when only the logical size changes.
         if (canvas.width !== size.width) {
@@ -496,6 +536,8 @@ export function useShaderRuntime({
       } catch (e) {
         console.warn('Failed to create texture after resizing', e)
         setError(e instanceof Error ? e : new Error(String(e)))
+      } finally {
+        finish()
       }
     })
     resizeObserver.observe(canvas, { box: 'device-pixel-content-box' })

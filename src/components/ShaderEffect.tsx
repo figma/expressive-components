@@ -45,6 +45,9 @@ export function ShaderEffect({
       className={className}
       style={{
         display: 'block',
+        // Keep intrinsic CSS sizing independent of the Retina backing store.
+        contain: 'size',
+        containIntrinsicSize: '300px 150px',
         width,
         height,
         ...(processedMask && { mask: processedMask }),
