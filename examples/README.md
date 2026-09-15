@@ -16,6 +16,12 @@ enable `chrome://flags/#enable-experimental-web-platform-features`, and restart 
 
 ## Manual testing
 
+- `large-texture`: test 5120 × 5120 and 6144 × 4608 DOM content through two shaders.
+  Scroll to all four labeled corners and switch between large and small sizes.
+  The source should turn red; green indicates the DOM fallback. The canvas CSS size
+  remains unchanged while its backing texture stays at or below 4096 per side
+  (or the device limit if lower). On Retina, the small size returns to full DPI.
+
 - `pattern-grid`: check that the diamond grid renders at 250 × 250 pixels.
 - `circle-with-bloom-effect`: check the 118 × 118 circle and its bloom effect.
 - `multiple-effects`: compare both 100 × 100 shader chains; changing their order

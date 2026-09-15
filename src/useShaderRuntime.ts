@@ -12,6 +12,7 @@ import type {
   ShaderData,
 } from './types.js'
 import { useWebGPUDevice } from './webgpu.js'
+import { getRenderSize } from './renderSize.js'
 
 export type DpiGPUTexture = GPUTexture & {
   dpi: number
@@ -281,8 +282,8 @@ export function useShaderRuntime({
         runtime.updateIntermediateTextures()
         const dpi = runtime.input.dpi
         const outputTexture = runtime.gpu.context.getCurrentTexture()
-        const logicalWidth = outputTexture.width / dpi
-        const logicalHeight = outputTexture.height / dpi
+        const logicalWidth = runtime.input.width
+        const logicalHeight = runtime.input.height
         runtime.output = makeDpiIndependent(outputTexture, dpi, logicalWidth, logicalHeight)
         shaders.forEach((effect, idx) => {
           effect.render(runtime.gpu.device, runtime.getShaderState(idx))
@@ -325,10 +326,15 @@ export function useShaderRuntime({
 
       const format: GPUTextureFormat = 'rgba8unorm'
       context.configure({ device, format, alphaMode: 'premultiplied' })
-      const canvasRect = canvas.getBoundingClientRect()
-      const logicalWidth = canvasRect.width
-      const logicalHeight = canvasRect.height
-      const dpi = canvas.width / logicalWidth
+      const size = getRenderSize(
+        canvas.clientWidth,
+        canvas.clientHeight,
+        window.devicePixelRatio,
+        device.limits.maxTextureDimension2D,
+      )
+      canvas.width = size.width
+      canvas.height = size.height
+      const { logicalWidth, logicalHeight, dpi } = size
       // RENDER_ATTACHMENT is mandatory on the destination of
       // copyElementImageToTexture in Chrome's HiC implementation. Without it,
       // the call doesn't throw but silently writes nothing — the texture
@@ -431,54 +437,65 @@ export function useShaderRuntime({
     }
   }, [canvas, deviceReady, hasChildren])
 
-  // Track device-pixel size so the canvas grid stays crisp.
+  // Cap the backing store before allocating textures. CSS layout stays full-sized;
+  // copyElementImageToTexture scales DOM content into this smaller render target.
   useEffect(() => {
     if (!canvas || !deviceReady) {
       return
     }
 
     const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.devicePixelContentBoxSize?.[0]) {
-          canvas.width = Math.max(entry.devicePixelContentBoxSize[0].inlineSize, 1)
-          canvas.height = Math.max(entry.devicePixelContentBoxSize[0].blockSize, 1)
-        } else if (entry.contentBoxSize?.[0]) {
-          // Fallback for browsers that don't support devicePixelContentBoxSize.
-          const dpr = window.devicePixelRatio || 1
-          canvas.width = Math.max(Math.round(entry.contentBoxSize[0].inlineSize * dpr), 1)
-          canvas.height = Math.max(Math.round(entry.contentBoxSize[0].blockSize * dpr), 1)
-        }
+      const runtime = runtimeRef.current
+      const entry = entries[0]
+      if (!runtime || !entry) {
+        return
+      }
+      const physicalBox = entry.devicePixelContentBoxSize?.[0]
+      const width = entry.contentRect.width
+      const height = entry.contentRect.height
+      const pixelRatio = physicalBox && width > 0 && height > 0
+        ? Math.min(physicalBox.inlineSize / width, physicalBox.blockSize / height)
+        : window.devicePixelRatio
+      const size = getRenderSize(width, height, pixelRatio, runtime.gpu.device.limits.maxTextureDimension2D)
+      const previous = runtime.input
+      if (
+        previous?.physicalWidth === size.width &&
+        previous?.physicalHeight === size.height &&
+        previous?.width === size.logicalWidth &&
+        previous?.height === size.logicalHeight &&
+        previous?.dpi === size.dpi
+      ) {
+        return
       }
 
-      // Recreate the scratch input texture after resize.
-      const runtime = runtimeRef.current
-      if (runtime) {
-        runtime.input?.destroy()
-        try {
-          const rect = canvas.getBoundingClientRect()
-          const logicalWidth = rect.width
-          const logicalHeight = rect.height
-          const dpi = canvas.width / logicalWidth
-          runtime.input = makeDpiIndependent(
-            runtime.gpu.device.createTexture({
-              size: [canvas.width, canvas.height, 1],
-              format: runtime.gpu.format,
-              usage:
-                GPUTextureUsage.TEXTURE_BINDING |
-                GPUTextureUsage.COPY_DST |
-                GPUTextureUsage.RENDER_ATTACHMENT,
-            }),
-            dpi,
-            logicalWidth,
-            logicalHeight,
-          )
-          isDirtiedRef.current = true
-          runtime.updateIntermediateTextures()
-        } catch (e) {
-          console.warn('Failed to create texture after resizing', e)
-          setError(e instanceof Error ? e : new Error(String(e)))
+      try {
+        // Avoid resetting the context when only the logical size changes.
+        if (canvas.width !== size.width) {
+          canvas.width = size.width
         }
+        if (canvas.height !== size.height) {
+          canvas.height = size.height
+        }
+        previous?.destroy()
+        runtime.input = makeDpiIndependent(
+          runtime.gpu.device.createTexture({
+            size: [size.width, size.height, 1],
+            format: runtime.gpu.format,
+            usage:
+              GPUTextureUsage.TEXTURE_BINDING |
+              GPUTextureUsage.COPY_DST |
+              GPUTextureUsage.RENDER_ATTACHMENT,
+          }),
+          size.dpi,
+          size.logicalWidth,
+          size.logicalHeight,
+        )
+        isDirtiedRef.current = true
+        runtime.updateIntermediateTextures()
         schedulePaintRef.current()
+      } catch (e) {
+        console.warn('Failed to create texture after resizing', e)
+        setError(e instanceof Error ? e : new Error(String(e)))
       }
     })
     resizeObserver.observe(canvas, { box: 'device-pixel-content-box' })

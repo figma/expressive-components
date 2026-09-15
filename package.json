@@ -44,9 +44,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "dev": "vite --config examples/vite.config.mjs",
-    "check": "npm run typecheck && npm run lint && npm run build",
+    "check": "npm run typecheck && npm run lint && npm run build && node --test test/*.test.mjs",
     "prepack": "npm run build",
-    "build:examples": "vite build --config examples/vite.config.mjs"
+    "build:examples": "vite build --config examples/vite.config.mjs",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "peerDependencies": {
     "react": "^18.3.1 || ^19.0.0"

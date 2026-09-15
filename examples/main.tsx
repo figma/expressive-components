@@ -4,6 +4,12 @@ import './index.css'
 
 const examples = [
   {
+    name: 'large-texture',
+    title: 'Large texture',
+    description: 'Oversized DOM content, downsampled to a bounded render texture.',
+    category: 'DOM effect',
+  },
+  {
     name: 'circle-with-bloom-effect',
     title: 'Circle with bloom',
     description: 'A soft glow applied to an SVG circle.',

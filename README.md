@@ -98,6 +98,21 @@ The [bloom example](examples/circle-with-bloom-effect) and
 [effect ordering example](examples/multiple-effects) contain runnable examples.
 `CustomEffect` remains an alias for `ShaderEffect`; it takes the same `shaders` prop.
 
+## Large canvases
+
+The runtime downsamples canvas backing stores and its input/intermediate textures
+when either device-pixel dimension exceeds 4096 (or the GPU device limit, if lower).
+CSS dimensions and shader-facing logical dimensions stay unchanged; large canvases
+trade pixel sharpness for bounded allocations. The same limit applies at mount and
+on resize, including Retina displays.
+
+Shader-owned textures are outside this cap. Shaders allocating scratch textures
+should use the input texture's `physicalWidth` / `physicalHeight` metadata rather
+than its logical `width` / `height` if they need to match the bounded backing store.
+
+Try the [large texture example](examples/large-texture/index.tsx) to test downsampling
+and resizing with DOM content and a two-effect chain.
+
 ## Shader contract
 
 ```ts
@@ -170,7 +185,7 @@ import { SOURCES } from '@figma/expressive-components/source'
 
 ```sh
 npm ci
-npm run check                         # TypeScript, ESLint, and library build
+npm run check                         # TypeScript, ESLint, library build, and unit tests
 npm run build:examples                # Build the example browser
 npm run dev                          # Run examples for manual testing
 npm pack --dry-run                    # Inspect the publishable package
