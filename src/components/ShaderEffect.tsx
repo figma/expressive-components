@@ -36,9 +36,7 @@ export function ShaderEffect({
     setCanvas(ref as unknown as HtmlInCanvasElement | null)
   }, [])
 
-  const canvasAttrs = hasChildren
-    ? { layoutsubtree: '', content: 'drawable' }
-    : ({} as Record<string, unknown>)
+  const canvasAttrs = hasChildren ? { content: 'drawable' } : ({} as Record<string, unknown>)
   const drawableAttrs = { drawable: '' } as Record<string, string>
 
   return error !== null ? (

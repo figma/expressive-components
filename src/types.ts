@@ -13,20 +13,6 @@ export interface PaintEvent extends Event {
   readonly changedElements: ReadonlyArray<Element>
 }
 
-export type GPUCopyElementImageDestination = {
-  destination: { texture: GPUTexture }
-  width?: number
-  height?: number
-}
-
-export type GPUCopyElementImageSource = {
-  source: Element
-  sx?: number
-  sy?: number
-  swidth?: number
-  sheight?: number
-}
-
 export type GPUDrawElementImageSource = {
   source: Element
   sourceX?: number
@@ -44,10 +30,6 @@ export type HtmlInCanvasQueue = GPUQueue & {
   drawElementImageToTexture?: (
     source: GPUDrawElementImageSource,
     destination: GPUDrawElementImageDestination,
-  ) => void
-  copyElementImageToTexture?: (
-    source: GPUCopyElementImageSource,
-    destination: GPUCopyElementImageDestination,
   ) => void
 }
 

@@ -151,65 +151,27 @@ export const DEFAULT_MANIFEST: Manifest = {
   name: '',
 }
 
-// Wrapper for the current draw API and both versions of the earlier copy API.
+// Draw DOM content into the shader input texture using the current HTML-in-Canvas API.
 // See https://github.com/WICG/html-in-canvas/issues/174.
-function copyElementImageToInputTexture(content: Element, runtime: RuntimeState) {
+function drawElementImageToInputTexture(content: Element, runtime: RuntimeState) {
   if (!runtime.input) {
     throw new Error('Cannot copy to null input texture')
   }
   const queue: HtmlInCanvasQueue = runtime.gpu.device.queue
 
-  if (queue.drawElementImageToTexture) {
-    try {
-      queue.drawElementImageToTexture(
-        { source: content },
-        {
-          texture: runtime.input,
-          size: {
-            width: runtime.input.physicalWidth,
-            height: runtime.input.physicalHeight,
-          },
-        },
-      )
-      return
-    } catch (error) {
-      // Older HTML-in-Canvas implementations use copyElementImageToTexture.
-      if (!queue.copyElementImageToTexture) {
-        throw error
-      }
-    }
-  }
-
-  if (!queue.copyElementImageToTexture) {
+  if (!queue.drawElementImageToTexture) {
     throw new Error('HTML-in-Canvas is not supported.')
   }
-  try {
-    queue.copyElementImageToTexture(
-      { source: content },
-      {
-        destination: { texture: runtime.input },
+  queue.drawElementImageToTexture(
+    { source: content },
+    {
+      texture: runtime.input,
+      size: {
         width: runtime.input.physicalWidth,
         height: runtime.input.physicalHeight,
       },
-    )
-  } catch {
-    const legacyQueue = queue as unknown as {
-      copyElementImageToTexture: (
-        content: Element,
-        width: number,
-        height: number,
-        destination: { texture: GPUTexture },
-      ) => void
-    }
-    legacyQueue.copyElementImageToTexture(
-      content,
-      runtime.input.physicalWidth,
-      runtime.input.physicalHeight,
-      {
-        texture: runtime.input,
-      },
-    )
-  }
+    },
+  )
 }
 
 /**
@@ -309,7 +271,7 @@ export function useShaderRuntime({
       })
       try {
         if (hasChildren && content && isDirtiedRef.current) {
-          copyElementImageToInputTexture(content, runtime)
+          drawElementImageToInputTexture(content, runtime)
           isDirtiedRef.current = false
         }
         runtime.updateIntermediateTextures()
@@ -358,14 +320,10 @@ export function useShaderRuntime({
         throw new Error('Failed to get WebGPU context.')
       }
 
-      // Check for either HTML-in-Canvas queue method.
+      // Check for the current HTML-in-Canvas queue method.
       // Only required when there are children to copy into the input texture; pure-GPU
       // effects with no DOM content leave the input as an empty (zeroed) texture.
-      if (
-        hasChildren &&
-        !('drawElementImageToTexture' in device.queue) &&
-        !('copyElementImageToTexture' in device.queue)
-      ) {
+      if (hasChildren && !('drawElementImageToTexture' in device.queue)) {
         throw new Error('HTML-in-Canvas is not supported.')
       }
 
@@ -498,7 +456,7 @@ export function useShaderRuntime({
   }, [canvas, deviceReady, hasChildren])
 
   // Cap the backing store before allocating textures. CSS layout stays full-sized;
-  // copyElementImageToTexture scales DOM content into this smaller render target.
+  // drawElementImageToTexture scales DOM content into this smaller render target.
   useEffect(() => {
     if (!canvas || !deviceReady) {
       return
