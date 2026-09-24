@@ -151,13 +151,38 @@ export const DEFAULT_MANIFEST: Manifest = {
   name: '',
 }
 
-// Wrapper function to accomodate queue.copyElementImageToTexture API changes.
-// See https://github.com/WICG/html-in-canvas/issues/132.
+// Wrapper for the current draw API and both versions of the earlier copy API.
+// See https://github.com/WICG/html-in-canvas/issues/174.
 function copyElementImageToInputTexture(content: Element, runtime: RuntimeState) {
   if (!runtime.input) {
     throw new Error('Cannot copy to null input texture')
   }
-  const queue: HtmlInCanvasQueue = runtime.gpu.device.queue as unknown as HtmlInCanvasQueue
+  const queue: HtmlInCanvasQueue = runtime.gpu.device.queue
+
+  if (queue.drawElementImageToTexture) {
+    try {
+      queue.drawElementImageToTexture(
+        { source: content },
+        {
+          texture: runtime.input,
+          size: {
+            width: runtime.input.physicalWidth,
+            height: runtime.input.physicalHeight,
+          },
+        },
+      )
+      return
+    } catch (error) {
+      // Older HTML-in-Canvas implementations use copyElementImageToTexture.
+      if (!queue.copyElementImageToTexture) {
+        throw error
+      }
+    }
+  }
+
+  if (!queue.copyElementImageToTexture) {
+    throw new Error('HTML-in-Canvas is not supported.')
+  }
   try {
     queue.copyElementImageToTexture(
       { source: content },
@@ -333,10 +358,14 @@ export function useShaderRuntime({
         throw new Error('Failed to get WebGPU context.')
       }
 
-      // Check for HTML-in-Canvas support by seeing if copyElementImageToTexture() exists.
+      // Check for either HTML-in-Canvas queue method.
       // Only required when there are children to copy into the input texture; pure-GPU
       // effects with no DOM content leave the input as an empty (zeroed) texture.
-      if (hasChildren && !('copyElementImageToTexture' in device.queue)) {
+      if (
+        hasChildren &&
+        !('drawElementImageToTexture' in device.queue) &&
+        !('copyElementImageToTexture' in device.queue)
+      ) {
         throw new Error('HTML-in-Canvas is not supported.')
       }
 
@@ -352,7 +381,7 @@ export function useShaderRuntime({
       canvas.height = size.height
       const { logicalWidth, logicalHeight, dpi } = size
       // RENDER_ATTACHMENT is mandatory on the destination of
-      // copyElementImageToTexture in Chrome's HiC implementation. Without it,
+      // HTML-in-Canvas in Chrome's implementation. Without it,
       // the call doesn't throw but silently writes nothing — the texture
       // stays zeroed. (Dawn emits "Destination texture needs to have CopyDst
       // and RenderAttachment usage." as a warning, but no exception.)

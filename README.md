@@ -10,8 +10,10 @@ modules exported from Figma or write your own `setup` and `render` functions.
 This is experimental browser technology. Fills require WebGPU in a secure context
 (HTTPS or localhost). Effects on DOM content also require
 [HTML-in-Canvas](https://github.com/WICG/html-in-canvas), currently available in
-recent Chromium builds with experimental web platform features enabled. When
-initialization fails, `ShaderEffect` renders its children as ordinary DOM and
+recent Chromium builds with experimental web platform features enabled. The runtime
+uses `drawElementImageToTexture` when available and supports earlier
+`copyElementImageToTexture` implementations. When initialization fails,
+`ShaderEffect` renders its children as ordinary DOM and
 `ShaderFill` renders nothing. React 18.3 and 19 are supported.
 
 ## Get started

@@ -27,8 +27,25 @@ export type GPUCopyElementImageSource = {
   sheight?: number
 }
 
+export type GPUDrawElementImageSource = {
+  source: Element
+  sourceX?: number
+  sourceY?: number
+  sourceWidth?: number
+  sourceHeight?: number
+}
+
+export type GPUDrawElementImageDestination = {
+  texture: GPUTexture
+  size: { width: number; height: number }
+}
+
 export type HtmlInCanvasQueue = GPUQueue & {
-  copyElementImageToTexture: (
+  drawElementImageToTexture?: (
+    source: GPUDrawElementImageSource,
+    destination: GPUDrawElementImageDestination,
+  ) => void
+  copyElementImageToTexture?: (
     source: GPUCopyElementImageSource,
     destination: GPUCopyElementImageDestination,
   ) => void
