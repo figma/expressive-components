@@ -1,0 +1,27 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+examples-dist/
+/src/source.generated.ts
+*.tsbuildinfo
+*.tgz
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.local
+*.log
+.npmrc
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Python release tooling
+__pycache__/
+*.pyc

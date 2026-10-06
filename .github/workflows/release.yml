@@ -1,0 +1,134 @@
+name: Release
+
+# Export pushes always rehearse. Only an explicit dispatch may stage on npm.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact committed version (optional assertion)
+        type: string
+      dist_tag:
+        description: npm distribution tag
+        default: latest
+        type: string
+      dry_run:
+        description: Build and pack without staging or publishing to npm
+        default: true
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'figma/expressive-components'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+    steps:
+      - name: Require main
+        env:
+          REF: ${{ github.ref }}
+        run: test "$REF" = refs/heads/main
+      - uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '22.22.0'
+          registry-url: https://registry.npmjs.org
+      - name: Resolve and validate package
+        id: package
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const p = JSON.parse(fs.readFileSync('package.json'));
+          const lock = JSON.parse(fs.readFileSync('package-lock.json'));
+          if (p.name !== '@figma/expressive-components' || p.private) throw Error('Invalid publish package');
+          if (p.repository.url !== 'git+https://github.com/figma/expressive-components.git') throw Error('Repository must match provenance source');
+          if (p.version !== lock.version || p.version !== lock.packages[''].version) throw Error('Lockfile version mismatch');
+          if (process.env.REQUESTED_VERSION && process.env.REQUESTED_VERSION !== p.version) throw Error('Requested version mismatch');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${p.version}\n`);
+          JS
+      - name: Check version is unpublished
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if OUTPUT=$(npm view "@figma/expressive-components@$VERSION" version 2>&1); then
+            echo "::error::Version is already published; bump the version."
+            exit 1
+          elif ! grep -q E404 <<< "$OUTPUT"; then
+            printf '%s\n' "$OUTPUT"
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build:examples
+      - name: Pack and verify distribution contents
+        run: |
+          npm pack --json > "$RUNNER_TEMP/pack.json"
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const [p] = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/pack.json`));
+          const paths = p.files.map(f => f.path);
+          for (const path of paths) {
+            if (!path.startsWith('dist/') && !['package.json', 'README.md', 'LICENSE'].includes(path)) throw Error(`Unexpected file: ${path}`);
+          }
+          for (const path of ['dist/index.js', 'dist/index.d.ts', 'dist/source.generated.js', 'dist/source.generated.d.ts']) {
+            if (!paths.includes(path)) throw Error(`Missing export: ${path}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Verified ${p.filename} (${paths.length} files).\nSource commit: ${process.env.GITHUB_SHA}\n`);
+          JS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: npm-package-${{ github.sha }}
+          path: '*.tgz'
+          if-no-files-found: error
+          retention-days: 7
+      - name: Dry run completed
+        if: github.event_name == 'push' || inputs.dry_run
+        run: echo 'Dry run complete. No npm staging, publishing, tags, or GitHub releases were created.' >> "$GITHUB_STEP_SUMMARY"
+
+  stage:
+    needs: verify
+    if: github.repository == 'figma/expressive-components' && github.event_name == 'workflow_dispatch' && !inputs.dry_run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Require public source for provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VISIBILITY=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility')
+          test "$VISIBILITY" = public || { echo '::error::Provenance requires a public source repository.'; exit 1; }
+      - uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '22.22.0'
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.21.0
+      - run: npm ci
+      - name: Stage with provenance
+        env:
+          DIST_TAG: ${{ inputs.dist_tag }}
+        run: |
+          npm stage publish --access public --provenance --tag "$DIST_TAG"
+          echo 'Package staged with provenance. Review and approve it on npm before creating a release tag.' >> "$GITHUB_STEP_SUMMARY"
