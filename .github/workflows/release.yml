@@ -98,7 +98,11 @@ jobs:
           retention-days: 7
       - name: Dry run completed
         if: github.event_name == 'push' || inputs.dry_run
-        run: echo 'Dry run complete. No npm staging, publishing, tags, or GitHub releases were created.' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            echo "Dry run verified distribution snapshot: [$GITHUB_SHA](https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA)."
+            echo 'No npm staging, publishing, tags, or GitHub releases were created.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   stage:
     needs: verify
