@@ -13,6 +13,10 @@ on:
         description: npm distribution tag
         default: latest
         type: string
+      verify_npm_auth:
+        description: Check the bootstrap npm token without staging or publishing
+        default: false
+        type: boolean
       dry_run:
         description: Build and pack without staging or publishing to npm
         default: true
@@ -104,6 +108,28 @@ jobs:
             echo 'No npm staging, publishing, tags, or GitHub releases were created.'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  npm-auth:
+    needs: verify
+    if: github.repository == 'figma/expressive-components' && github.event_name == 'workflow_dispatch' && inputs.verify_npm_auth
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: npm-release
+    permissions:
+      contents: read
+    steps:
+      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+        with:
+          node-version: '22.22.0'
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@11.21.0
+      - name: Check bootstrap token identity (read only)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN" || { echo '::error::NPM_TOKEN is required for this check.'; exit 1; }
+          NPM_USER=$(npm whoami --registry=https://registry.npmjs.org)
+          echo "Bootstrap token authenticated as $NPM_USER. No package was staged or published." >> "$GITHUB_STEP_SUMMARY"
+
   stage:
     needs: verify
     if: github.repository == 'figma/expressive-components' && github.event_name == 'workflow_dispatch' && !inputs.dry_run
@@ -133,6 +159,7 @@ jobs:
       - name: Stage with provenance
         env:
           DIST_TAG: ${{ inputs.dist_tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm stage publish --access public --provenance --tag "$DIST_TAG"
           echo 'Package staged with provenance. Review and approve it on npm before creating a release tag.' >> "$GITHUB_STEP_SUMMARY"
