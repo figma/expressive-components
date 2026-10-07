@@ -65,6 +65,21 @@ jobs:
           if (process.env.REQUESTED_VERSION && process.env.REQUESTED_VERSION !== p.version) throw Error('Requested version mismatch');
           fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${p.version}\n`);
           JS
+      - name: Check release notes and version
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          DIST_TAG: ${{ inputs.dist_tag }}
+          STAGING: ${{ github.event_name == 'workflow_dispatch' && !inputs.dry_run }}
+        run: |
+          bash scripts/changelog-section.sh CHANGELOG.md "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+          if [[ "$STAGING" == true && "$VERSION" == *-* && "$DIST_TAG" == latest ]]; then
+            echo '::error::Stage prereleases under a tag such as beta or next, rather than latest.'
+            exit 1
+          fi
+          {
+            echo "### Release notes for v$VERSION"
+            cat "$RUNNER_TEMP/release-notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Check version is unpublished
         env:
           VERSION: ${{ steps.package.outputs.version }}
@@ -162,4 +177,4 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           npm stage publish --access public --provenance --tag "$DIST_TAG"
-          echo 'Package staged with provenance. Review and approve it on npm before creating a release tag.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Package staged with provenance. Review and approve it on npm, then dispatch Finalize Release for the published version.' >> "$GITHUB_STEP_SUMMARY"
