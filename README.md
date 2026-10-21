@@ -102,13 +102,13 @@ The [bloom example](examples/circle-with-bloom-effect) and
 
 The runtime downsamples canvas backing stores and its input/intermediate textures
 when either device-pixel dimension exceeds 4096 (or the GPU device limit, if lower).
-CSS dimensions and shader-facing logical dimensions stay unchanged; large canvases
-trade pixel sharpness for bounded allocations. The same limit applies at mount and
-on resize, including Retina displays.
+CSS dimensions stay unchanged; shader-facing texture dimensions reflect the reduced
+backing store. Large canvases trade pixel sharpness for bounded allocations. The
+same limit applies at mount and on resize, including Retina displays.
 
-Shader-owned textures are outside this cap. Shaders allocating scratch textures
-should use the input texture's `physicalWidth` / `physicalHeight` metadata rather
-than its logical `width` / `height` if they need to match the bounded backing store.
+Shader-owned textures are outside this cap. Use the input texture's native `width`
+and `height` when allocating scratch textures that must match the backing store.
+`frame.renderScale` reports the effective rendering scale, including downsampling.
 
 Try the [large texture example](examples/large-texture/index.tsx) to test downsampling
 and resizing with DOM content and a two-effect chain.
@@ -145,18 +145,19 @@ new shader object/array when parameters change.
 | `input` | Rasterized DOM or preceding shader output; fills receive a zeroed scratch texture |
 | `output` | Current render target; may be `null` during setup |
 | `time`, `deltaTime`, `frame` | Elapsed milliseconds, frame delta, and frame counter |
-| `mousePosition` | Pointer coordinates in CSS pixels relative to the canvas; `down` is currently always `false` |
-| `renderScale` | Currently `1` |
+| `mousePosition` | Pointer coordinates in backing-texture pixels; `down` tracks the primary button |
+| `renderScale` | Texture pixels per CSS pixel: device pixel ratio, reduced for capped canvases |
 | `params` | The shader's parameter object |
 | `state` | Per-shader scratch state shared between setup and render |
 
 Check that `frame.output` is non-null before rendering. Values in `state` are
 `unknown`; narrow or cast them to your shader's resource types. Texture `width`
-and `height` are logical dimensions; the runtime handles device-pixel sizing.
+and `height` are native backing-texture dimensions in pixels. Multiply CSS-space
+lengths such as blur radii by `frame.renderScale` before using them in a shader.
 
 Set `manifest.isAnimated` to advance the clock and render continuously. Set
-`manifest.usesMouse` to track pointer movement and repaint on movement. Include the
-manifest on the shader object (`{ setup, render, params, manifest }`). Omitting it
+`manifest.usesMouse` to track pointer movement and primary-button down/up/cancel,
+repainting on input. Include the manifest on the shader object (`{ setup, render, params, manifest }`). Omitting it
 uses `DEFAULT_MANIFEST`, which disables both behaviors.
 
 The runtime shares one GPU device across the page, manages canvas/input/intermediate
@@ -165,10 +166,15 @@ show the component fallback (children for `ShaderEffect`, nothing for `ShaderFil
 After device loss, remounting acquires a fresh shared device. Shader resources stored
 in `frame.state` are not explicitly disposed by the runtime.
 
-Fragment positions are texture pixels. For pointer comparisons in CSS pixels, divide
-fragment coordinates by the actual backing-to-logical size ratio on each axis
-(`physicalWidth / width`, `physicalHeight / height`). This also handles downsampling;
-see the mouse fill example.
+Fragment positions and `mousePosition` use the same texture-pixel coordinate space.
+Pointer coordinates account for the canvas’s displayed bounds, including scaled
+parents. See the mouse fill example for a disc that follows the pointer and changes
+color while the primary button is pressed.
+
+Migration from the previous runtime: textures no longer override native `width` and
+`height` or expose `physicalWidth`, `physicalHeight`, and `dpi` metadata. Use native
+texture dimensions, `frame.renderScale` for CSS-space lengths, and texture-space
+pointer coordinates.
 
 ## Component props
 

@@ -36,7 +36,10 @@ export function ShaderEffect({
     setCanvas(ref as unknown as HtmlInCanvasElement | null)
   }, [])
 
-  const canvasAttrs = hasChildren ? { layoutsubtree: '' } : ({} as Record<string, unknown>)
+  const canvasAttrs = hasChildren
+    ? { layoutsubtree: '', content: 'drawable' }
+    : ({} as Record<string, unknown>)
+  const drawableAttrs = { drawable: '' } as Record<string, string>
 
   return error !== null ? (
     <>{children}</>
@@ -57,7 +60,11 @@ export function ShaderEffect({
       {...canvasAttrs}
     >
       {hasChildren ? (
-        <div ref={contentRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
+        <div
+          ref={contentRef}
+          style={{ position: 'relative', width: '100%', height: '100%' }}
+          {...drawableAttrs}
+        >
           {children}
         </div>
       ) : null}

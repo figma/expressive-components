@@ -1,0 +1,8 @@
+# Security-sensitive source and release configuration.
+# Update these owners when maintainer responsibilities change.
+/.github/ @hchau-figma
+/scripts/ @hchau-figma
+/package.json @hchau-figma
+/package-lock.json @hchau-figma
+/gen-source.js @hchau-figma
+/SECURITY.md @hchau-figma

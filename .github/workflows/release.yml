@@ -42,11 +42,11 @@ jobs:
         env:
           REF: ${{ github.ref }}
         run: test "$REF" = refs/heads/main
-      - uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: figma/actions-checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+      - uses: figma/actions-setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22.22.0'
           registry-url: https://registry.npmjs.org
@@ -109,7 +109,7 @@ jobs:
           }
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Verified ${p.filename} (${paths.length} files).\nSource commit: ${process.env.GITHUB_SHA}\n`);
           JS
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: npm-package-${{ github.sha }}
           path: '*.tgz'
@@ -132,7 +132,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+      - uses: figma/actions-setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22.22.0'
           registry-url: https://registry.npmjs.org
@@ -161,11 +161,11 @@ jobs:
         run: |
           VISIBILITY=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility')
           test "$VISIBILITY" = public || { echo '::error::Provenance requires a public source repository.'; exit 1; }
-      - uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938
+      - uses: figma/actions-checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af
+      - uses: figma/actions-setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22.22.0'
           registry-url: https://registry.npmjs.org

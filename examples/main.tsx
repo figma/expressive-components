@@ -36,7 +36,7 @@ const examples = [
   {
     name: 'mouse-fill',
     title: 'Mouse fill',
-    description: 'Move your pointer across the canvas to guide the fill.',
+    description: 'Move your pointer to guide the fill; hold the primary button to turn it blue.',
     category: 'Interaction',
   },
 ] as const

@@ -15,57 +15,16 @@ import { useWebGPUDevice } from './webgpu.js'
 import { beginGpuErrorScope } from './gpuErrors.js'
 import { getRenderSize } from './renderSize.js'
 
-export type DpiGPUTexture = GPUTexture & {
-  dpi: number
-  physicalWidth: number
-  physicalHeight: number
-}
-
-function makeDpiIndependent(
-  texture: GPUTexture,
-  dpi: number,
-  logicalWidth: number,
-  logicalHeight: number,
-) {
-  // If texture is already a DpiGPUTexture, then this is a no-op.
-  const dpiTexture = texture as Partial<DpiGPUTexture>
-  if (dpiTexture.physicalWidth !== undefined && dpiTexture.physicalHeight !== undefined) {
-    return texture as DpiGPUTexture
-  }
-
-  const physicalWidth = texture.width
-  const physicalHeight = texture.height
-
-  Object.defineProperty(texture, 'width', {
-    value: logicalWidth,
-    writable: false,
-    configurable: true,
-    enumerable: true,
-  })
-  Object.defineProperty(texture, 'height', {
-    value: logicalHeight,
-    writable: false,
-    configurable: true,
-    enumerable: true,
-  })
-
-  const result = texture as DpiGPUTexture
-  result.dpi = dpi
-  result.physicalWidth = physicalWidth
-  result.physicalHeight = physicalHeight
-
-  return result
-}
-
 class RuntimeState {
   generation = 0
+  renderScale: number
   gpu: GpuState
-  input: DpiGPUTexture | null
-  output: DpiGPUTexture | null = null
+  input: GPUTexture | null
+  output: GPUTexture | null = null
   shaderData: ShaderData[] = []
   // An array of 2 textures that we alternate between for rendering multiple shaders
   // in sequence.
-  intermediateTextures: DpiGPUTexture[] = []
+  intermediateTextures: GPUTexture[] = []
 
   _time = 0
   _deltaTime = 0
@@ -76,9 +35,10 @@ class RuntimeState {
   isAnimated = false
   usesMouse = false
 
-  constructor(gpu: GpuState, input: DpiGPUTexture | null) {
+  constructor(gpu: GpuState, input: GPUTexture | null, renderScale: number) {
     this.gpu = gpu
     this.input = input
+    this.renderScale = renderScale
   }
 
   getShaderState(index: number): CustomEffectState {
@@ -93,24 +53,18 @@ class RuntimeState {
       deltaTime: this._deltaTime,
       frame: this._frame,
       mousePosition: this._mousePosition,
-      renderScale: 1,
+      renderScale: this.renderScale,
       params: this.shaderData[index]!.shader.params,
       state: this.shaderData[index]!.state,
     }
   }
 
-  createIntermediateTexture(input: DpiGPUTexture): DpiGPUTexture {
-    const { width, height, physicalWidth, physicalHeight, dpi } = input
-    return makeDpiIndependent(
-      this.gpu.device.createTexture({
-        size: [physicalWidth, physicalHeight, 1],
-        format: this.gpu.format,
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
-      }),
-      dpi,
-      width,
-      height,
-    )
+  createIntermediateTexture(input: GPUTexture): GPUTexture {
+    return this.gpu.device.createTexture({
+      size: [input.width, input.height, 1],
+      format: this.gpu.format,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+    })
   }
 
   // This is a no-op if input is null or if the input texture dimensions already matches the
@@ -120,16 +74,13 @@ class RuntimeState {
       return
     }
 
-    const { width, height, physicalWidth, physicalHeight, dpi } = this.input
+    const { width, height } = this.input
     const currentIntermediateTextures = this.intermediateTextures
 
     // Do not recreate intermediate textures if canvas size hasn't changed.
     if (
       currentIntermediateTextures[0]?.width === width &&
-      currentIntermediateTextures[0]?.height === height &&
-      currentIntermediateTextures[0]?.physicalWidth === physicalWidth &&
-      currentIntermediateTextures[0]?.physicalHeight === physicalHeight &&
-      currentIntermediateTextures[0]?.dpi === dpi
+      currentIntermediateTextures[0]?.height === height
     ) {
       return
     }
@@ -151,20 +102,45 @@ export const DEFAULT_MANIFEST: Manifest = {
   name: '',
 }
 
-// Wrapper function to accomodate queue.copyElementImageToTexture API changes.
-// See https://github.com/WICG/html-in-canvas/issues/132.
+// Wrapper for the current draw API and both versions of the earlier copy API.
+// See https://github.com/WICG/html-in-canvas/issues/174.
 function copyElementImageToInputTexture(content: Element, runtime: RuntimeState) {
   if (!runtime.input) {
     throw new Error('Cannot copy to null input texture')
   }
-  const queue: HtmlInCanvasQueue = runtime.gpu.device.queue as unknown as HtmlInCanvasQueue
+  const queue: HtmlInCanvasQueue = runtime.gpu.device.queue
+
+  if (queue.drawElementImageToTexture) {
+    try {
+      queue.drawElementImageToTexture(
+        { source: content },
+        {
+          texture: runtime.input,
+          size: {
+            width: runtime.input.width,
+            height: runtime.input.height,
+          },
+        },
+      )
+      return
+    } catch (error) {
+      // Older HTML-in-Canvas implementations use copyElementImageToTexture.
+      if (!queue.copyElementImageToTexture) {
+        throw error
+      }
+    }
+  }
+
+  if (!queue.copyElementImageToTexture) {
+    throw new Error('HTML-in-Canvas is not supported.')
+  }
   try {
     queue.copyElementImageToTexture(
       { source: content },
       {
         destination: { texture: runtime.input },
-        width: runtime.input.physicalWidth,
-        height: runtime.input.physicalHeight,
+        width: runtime.input.width,
+        height: runtime.input.height,
       },
     )
   } catch {
@@ -176,14 +152,9 @@ function copyElementImageToInputTexture(content: Element, runtime: RuntimeState)
         destination: { texture: GPUTexture },
       ) => void
     }
-    legacyQueue.copyElementImageToTexture(
-      content,
-      runtime.input.physicalWidth,
-      runtime.input.physicalHeight,
-      {
-        texture: runtime.input,
-      },
-    )
+    legacyQueue.copyElementImageToTexture(content, runtime.input.width, runtime.input.height, {
+      texture: runtime.input,
+    })
   }
 }
 
@@ -288,11 +259,7 @@ export function useShaderRuntime({
           isDirtiedRef.current = false
         }
         runtime.updateIntermediateTextures()
-        const dpi = runtime.input.dpi
-        const outputTexture = runtime.gpu.context.getCurrentTexture()
-        const logicalWidth = runtime.input.width
-        const logicalHeight = runtime.input.height
-        runtime.output = makeDpiIndependent(outputTexture, dpi, logicalWidth, logicalHeight)
+        runtime.output = runtime.gpu.context.getCurrentTexture()
         shaders.forEach((effect, idx) => {
           effect.render(runtime.gpu.device, runtime.getShaderState(idx))
         })
@@ -320,7 +287,7 @@ export function useShaderRuntime({
     if (!canvas || !device) {
       return
     }
-    let input: DpiGPUTexture | null = null
+    let input: GPUTexture | null = null
     let cancelled = false
     const finish = beginGpuErrorScope(device, (error) => {
       if (!cancelled) {
@@ -333,10 +300,14 @@ export function useShaderRuntime({
         throw new Error('Failed to get WebGPU context.')
       }
 
-      // Check for HTML-in-Canvas support by seeing if copyElementImageToTexture() exists.
+      // Check for either HTML-in-Canvas queue method.
       // Only required when there are children to copy into the input texture; pure-GPU
       // effects with no DOM content leave the input as an empty (zeroed) texture.
-      if (hasChildren && !('copyElementImageToTexture' in device.queue)) {
+      if (
+        hasChildren &&
+        !('drawElementImageToTexture' in device.queue) &&
+        !('copyElementImageToTexture' in device.queue)
+      ) {
         throw new Error('HTML-in-Canvas is not supported.')
       }
 
@@ -350,28 +321,22 @@ export function useShaderRuntime({
       )
       canvas.width = size.width
       canvas.height = size.height
-      const { logicalWidth, logicalHeight, dpi } = size
       // RENDER_ATTACHMENT is mandatory on the destination of
       // copyElementImageToTexture in Chrome's HiC implementation. Without it,
       // the call doesn't throw but silently writes nothing — the texture
       // stays zeroed. (Dawn emits "Destination texture needs to have CopyDst
       // and RenderAttachment usage." as a warning, but no exception.)
 
-      input = makeDpiIndependent(
-        device.createTexture({
-          size: [canvas.width, canvas.height, 1],
-          format,
-          usage:
-            GPUTextureUsage.TEXTURE_BINDING |
-            GPUTextureUsage.COPY_DST |
-            GPUTextureUsage.RENDER_ATTACHMENT,
-        }),
-        dpi,
-        logicalWidth,
-        logicalHeight,
-      )
+      input = device.createTexture({
+        size: [canvas.width, canvas.height, 1],
+        format,
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING |
+          GPUTextureUsage.COPY_DST |
+          GPUTextureUsage.RENDER_ATTACHMENT,
+      })
 
-      runtimeRef.current = new RuntimeState({ device, context, format }, input)
+      runtimeRef.current = new RuntimeState({ device, context, format }, input, size.dpi)
       isDirtiedRef.current = true
       setDeviceReady(true)
     } catch (e) {
@@ -481,21 +446,20 @@ export function useShaderRuntime({
       if (!runtime || !entry) {
         return
       }
-      const physicalBox = entry.devicePixelContentBoxSize?.[0]
-      const width = entry.contentRect.width
-      const height = entry.contentRect.height
-      const pixelRatio = physicalBox && width > 0 && height > 0
-        ? Math.min(physicalBox.inlineSize / width, physicalBox.blockSize / height)
-        : window.devicePixelRatio
-      const size = getRenderSize(width, height, pixelRatio, runtime.gpu.device.limits.maxTextureDimension2D)
+      const size = getRenderSize(
+        entry.contentRect.width,
+        entry.contentRect.height,
+        window.devicePixelRatio,
+        runtime.gpu.device.limits.maxTextureDimension2D,
+      )
       const previous = runtime.input
-      if (
-        previous?.physicalWidth === size.width &&
-        previous?.physicalHeight === size.height &&
-        previous?.width === size.logicalWidth &&
-        previous?.height === size.logicalHeight &&
-        previous?.dpi === size.dpi
-      ) {
+      const scaleChanged = runtime.renderScale !== size.dpi
+      runtime.renderScale = size.dpi
+      if (previous?.width === size.width && previous?.height === size.height) {
+        if (scaleChanged) {
+          isDirtiedRef.current = true
+          schedulePaintRef.current()
+        }
         return
       }
 
@@ -517,19 +481,14 @@ export function useShaderRuntime({
           canvas.height = size.height
         }
         previous?.destroy()
-        runtime.input = makeDpiIndependent(
-          runtime.gpu.device.createTexture({
-            size: [size.width, size.height, 1],
-            format: runtime.gpu.format,
-            usage:
-              GPUTextureUsage.TEXTURE_BINDING |
-              GPUTextureUsage.COPY_DST |
-              GPUTextureUsage.RENDER_ATTACHMENT,
-          }),
-          size.dpi,
-          size.logicalWidth,
-          size.logicalHeight,
-        )
+        runtime.input = runtime.gpu.device.createTexture({
+          size: [size.width, size.height, 1],
+          format: runtime.gpu.format,
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.COPY_DST |
+            GPUTextureUsage.RENDER_ATTACHMENT,
+        })
         isDirtiedRef.current = true
         runtime.updateIntermediateTextures()
         schedulePaintRef.current()
@@ -552,8 +511,11 @@ export function useShaderRuntime({
 
     const mouseSync = (runtime: RuntimeState, e: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()
-      runtime._mousePosition.x = e.clientX - rect.left
-      runtime._mousePosition.y = e.clientY - rect.top
+      if (rect.width === 0 || rect.height === 0) {
+        return
+      }
+      runtime._mousePosition.x = ((e.clientX - rect.left) * canvas.width) / rect.width
+      runtime._mousePosition.y = ((e.clientY - rect.top) * canvas.height) / rect.height
     }
 
     // The rAF clock already repaints animated effects, so only repaint here when
@@ -572,9 +534,38 @@ export function useShaderRuntime({
       mouseSync(runtime, e)
       repaint()
     }
+    const onDown = (e: PointerEvent) => {
+      const runtime = runtimeRef.current
+      if (e.button !== 0 || !runtime || !runtime.usesMouse) {
+        return
+      }
+      runtime._mousePosition.down = true
+      mouseSync(runtime, e)
+      repaint()
+    }
+    const clearDown = () => {
+      const runtime = runtimeRef.current
+      if (!runtime || !runtime.usesMouse || !runtime._mousePosition.down) {
+        return
+      }
+      runtime._mousePosition.down = false
+      repaint()
+    }
+    const onUp = (e: PointerEvent) => {
+      if (e.button === 0) {
+        clearDown()
+      }
+    }
+
     window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerdown', onDown, { passive: true })
+    window.addEventListener('pointerup', onUp, { passive: true })
+    window.addEventListener('pointercancel', clearDown, { passive: true })
     return () => {
       window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', clearDown)
     }
   }, [canvas, deviceReady, hasChildren])
 

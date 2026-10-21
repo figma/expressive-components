@@ -3,6 +3,8 @@ export type {
   GpuState,
   MousePosition,
   Shader,
+  GPUDrawElementImageSource,
+  GPUDrawElementImageDestination,
   GPUCopyElementImageDestination,
   GPUCopyElementImageSource,
   HtmlInCanvas,

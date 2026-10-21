@@ -27,7 +27,7 @@ enable `chrome://flags/#enable-experimental-web-platform-features`, and restart 
 - `multiple-effects`: compare both 100 × 100 shader chains; changing their order
   should produce different colors.
 - `animated-fill`: check that the 256 × 256 fill changes from red to blue.
-- `mouse-fill`: move the pointer over the 256 × 256 fill and check its response.
+- `mouse-fill`: move the pointer over the 256 × 256 fill and check its response. Hold the primary button to turn the disc blue.
 
 Inspect browser warnings if rendering fails. On initialization failure,
 `ShaderEffect` falls back to its DOM children and `ShaderFill` renders nothing;

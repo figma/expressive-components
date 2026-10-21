@@ -27,8 +27,25 @@ export type GPUCopyElementImageSource = {
   sheight?: number
 }
 
+export type GPUDrawElementImageSource = {
+  source: Element
+  sourceX?: number
+  sourceY?: number
+  sourceWidth?: number
+  sourceHeight?: number
+}
+
+export type GPUDrawElementImageDestination = {
+  texture: GPUTexture
+  size: { width: number; height: number }
+}
+
 export type HtmlInCanvasQueue = GPUQueue & {
-  copyElementImageToTexture: (
+  drawElementImageToTexture?: (
+    source: GPUDrawElementImageSource,
+    destination: GPUDrawElementImageDestination,
+  ) => void
+  copyElementImageToTexture?: (
     source: GPUCopyElementImageSource,
     destination: GPUCopyElementImageDestination,
   ) => void
@@ -48,12 +65,14 @@ export type GpuState = {
 
 export interface CustomEffectState {
   gpu: GpuState
+  // Native texture dimensions and mouse coordinates are in backing-texture pixels.
   input: GPUTexture | null
   output: GPUTexture | null
   readonly time: number
   readonly deltaTime: number
   readonly frame: number
   readonly mousePosition: MousePosition
+  // Texture pixels per CSS pixel; reduced when the backing store is capped.
   readonly renderScale: number
   params: Record<string, unknown>
   state: Record<string, unknown>

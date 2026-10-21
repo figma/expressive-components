@@ -1,8 +1,8 @@
-// Draws a red disc centered on the pointer over a white field.
+// Draws a red disc centered on the pointer, turning it blue while pressed.
 export function setup(device: GPUDevice, frame: unknown) {
   const WGSL = `
-// xy = mouse position in px, z = disc radius in px.
-struct Uniforms { values: vec4f, scale: vec4f };
+// xy = mouse position in px, z = disc radius in px, w = mouse-button state.
+struct Uniforms { values: vec4f };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 
 @vertex fn vs_main(@location(0) pos: vec2f) -> @builtin(position) vec4f {
@@ -10,8 +10,8 @@ struct Uniforms { values: vec4f, scale: vec4f };
 }
 
 @fragment fn fs_main(@builtin(position) fragPos: vec4f) -> @location(0) vec4f {
-  if (distance(fragPos.xy / u.scale.xy, u.values.xy) < u.values.z) {
-    return vec4f(1.0, 0.0, 0.0, 1.0);
+  if (distance(fragPos.xy, u.values.xy) < u.values.z) {
+    return select(vec4f(1.0, 0.0, 0.0, 1.0), vec4f(0.0, 0.0, 1.0, 1.0), u.values.w > 0.5);
   }
   return vec4f(1.0, 1.0, 1.0, 1.0);
 }
@@ -50,7 +50,7 @@ struct Uniforms { values: vec4f, scale: vec4f };
   frame.state.quad.unmap()
 
   frame.state.uniformBuf = device.createBuffer({
-    size: 32,
+    size: 16,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   })
 }
@@ -61,9 +61,10 @@ export function render(device, frame) {
     frame.state.uniformBuf,
     0,
     new Float32Array([
-      frame.mousePosition.x, frame.mousePosition.y, radius, 0,
-      frame.output.physicalWidth / frame.output.width,
-      frame.output.physicalHeight / frame.output.height, 0, 0,
+      frame.mousePosition.x,
+      frame.mousePosition.y,
+      radius * frame.renderScale,
+      frame.mousePosition.down ? 1 : 0,
     ]),
   )
 
