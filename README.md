@@ -1,5 +1,8 @@
 # Expressive Components
 
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/@figma/expressive-components.svg?style=flat)](https://www.npmjs.com/package/@figma/expressive-components)
+
 React components for WebGPU shader fills and effects on DOM content. Run shader
 modules exported from Figma or write your own `setup` and `render` functions.
 
